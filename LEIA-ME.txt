@@ -34,7 +34,7 @@ Arquivos: index.html, style.css, app.js, firebase-config.js
    - Um cria a sala e manda o código (ou o botão "Copiar link"). O outro entra com o código.
    - O dono da sala escolhe: tamanho da senha (8, 10 ou 12), tempo por jogada, quem começa e repetição.
    - Cada um cria a senha (letras e números) no próprio PC. A senha NÃO vai para o servidor durante a partida.
-   - Verde = caractere certo naquela posição. Vermelho = não é esse naquela posição.
+   - Verde = lugar certo. Laranja = existe em outro lugar. Vermelho = não existe (ou já contou todas as cópias).
    - Na vez do outro, você vê ao vivo o que ele está digitando.
    - Os dois precisam ficar com a página aberta até o fim.
    - Recarregou sem querer? Abra o mesmo link (?sala=CÓDIGO) que volta pra sala.

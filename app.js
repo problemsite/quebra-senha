@@ -99,7 +99,9 @@ const Sound = (() => {
     send(){ tone(500, .18, "sawtooth", .04, 0, 1400); noise(.18, .04, 0, 3000); },
     reveal(f, i){ const d = i * .08;
       if(f === "G"){ tone(1047, .22, "sine", .13, d); tone(1568, .2, "sine", .05, d + .02); }
+      else if(f === "O") tone(660, .16, "triangle", .11, d);
       else { tone(170, .1, "sine", .1, d, 100); } },
+    allFound(dl){ [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, .3, "triangle", .1, dl + i * .09)); },
     newGreen(dl){ [784, 988, 1175, 1568].forEach((f, i) => tone(f, .22, "sine", .11, dl + i * .07)); },
     near(dl){ for(let i = 0; i < 3; i++){ tone(880, .12, "square", .06, dl + i * .22); tone(660, .12, "square", .05, dl + .1 + i * .22); } },
     oppGreen(){ tone(330, .3, "sawtooth", .06, 0, 220); tone(311, .3, "sawtooth", .05, .05, 200); },
@@ -117,19 +119,43 @@ const Sound = (() => {
 
 /* =====================================================================
    REGRAS
-   verde = caractere certo naquela posição · vermelho = não é esse naquela posição
+   verde = lugar certo · laranja = existe em outro lugar · vermelho = não existe (ou já contou todas as cópias)
    ===================================================================== */
-const feedback = (secret, guess) => secret.map((c, i) => guess[i] === c ? "G" : "R").join("");
+function feedback(secret, guess){
+  const L = secret.length, res = Array(L).fill("R"), cnt = {};
+  for(let i = 0; i < L; i++){ if(guess[i] === secret[i]) res[i] = "G"; else cnt[secret[i]] = (cnt[secret[i]] || 0) + 1; }
+  for(let i = 0; i < L; i++){ if(res[i] !== "G" && cnt[guess[i]] > 0){ res[i] = "O"; cnt[guess[i]]--; } }
+  return res.join("");
+}
 const listOf = (room, pc) => { const o = room?.guesses?.[pc]; if(!o) return []; return Object.keys(o).map(Number).sort((a, b) => a - b).map(k => o[k]); };
 const revealed = list => list.filter(e => e.f && !e.s);
 const tries = list => list.filter(e => !e.s).length;
 function knowledge(list, L, rep){
   const fixed = Array(L).fill(null), ban = Array.from({ length: L }, () => new Set());
-  for(const a of revealed(list)) for(let i = 0; i < L; i++){ if(a.f[i] === "G") fixed[i] = a.g[i]; else ban[i].add(a.g[i]); }
+  const mn = {}, ex = {};
+  for(const a of revealed(list)){
+    const seen = {}, hasR = {};
+    for(let i = 0; i < L; i++){
+      const c = a.g[i], f = a.f[i];
+      if(f === "G") fixed[i] = c; else ban[i].add(c);
+      if(f !== "R") seen[c] = (seen[c] || 0) + 1; else hasR[c] = true;
+    }
+    for(const c of new Set(a.g)){ const k = seen[c] || 0; if(k) mn[c] = Math.max(mn[c] || 0, k); if(hasR[c]) ex[c] = k; }
+  }
   if(!rep) fixed.forEach((c, i) => { if(c) ban.forEach((b, j) => { if(j !== i) b.add(c); }); });
+  const dead = c => ex[c] === 0;
+  const state = {};
+  CHARS.forEach(c => {
+    if(dead(c)) state[c] = "R";
+    else if(mn[c]){ const placed = fixed.filter(x => x === c).length; state[c] = (ex[c] != null && placed >= ex[c]) || (!rep && placed) ? "G" : "O"; }
+    else state[c] = "";
+  });
+  // caractere já completo (todas as cópias no lugar) não cabe em outras posições
+  CHARS.forEach(c => { if(state[c] === "G" && ex[c] != null) ban.forEach((b, i) => { if(fixed[i] !== c) b.add(c); }); });
   const greens = fixed.filter(Boolean).length;
-  const left = ban.map((b, i) => fixed[i] ? 1 : CHARS.length - b.size);
-  return { fixed, ban, greens, left };
+  const found = Math.min(L, Object.values(mn).reduce((a, b) => a + b, 0));
+  const left = ban.map((b, i) => fixed[i] ? 1 : CHARS.filter(c => !dead(c) && !b.has(c)).length);
+  return { fixed, ban, greens, left, state, found, mn, ex, dead };
 }
 function randomPw(L, rep){
   if(rep) return Array.from({ length: L }, () => CHARS[Math.floor(Math.random() * CHARS.length)]);
@@ -353,14 +379,14 @@ function updateGame(){
     if(over) bottom = `<div class="actions"><button class="btn cyan" data-act="showend">Ver resultado</button></div>`;
     else if(pending) bottom = `<div class="hintrow"><span class="waiting" style="color:var(--ink-2)">Verificando <span class="dots"><i></i><i></i><i></i></span></span></div>`;
     else {
-      const curBan = K.ban[S.cur] || new Set(), bad = S.draft.some((c, i) => c && !K.fixed[i] && K.ban[i].has(c));
+      const curBan = K.ban[S.cur] || new Set(), bad = S.draft.some((c, i) => c && !K.fixed[i] && (K.ban[i].has(c) || K.dead(c)));
       bottom = `<div class="row" id="entry">${S.draft.map((c, i) => {
           let cls = "slot"; if(K.fixed[i]) cls += " lock"; else if(i === S.cur) cls += " cur";
-          if(c && !K.fixed[i] && K.ban[i].has(c)) cls += " bad";
+          if(c && !K.fixed[i] && (K.ban[i].has(c) || K.dead(c))) cls += " bad";
           return `<button class="${cls}" data-slot="${i}" aria-label="Posição ${i+1}"><b>${esc(c)}</b></button>`;
         }).join("")}</div>
-        <div class="kb">${CHARS.map(c => `<button class="key ${curBan.has(c) ? "no" : ""}" data-key="${c}" ${curBan.has(c) ? "disabled" : ""}><span>${c}</span></button>`).join("")}</div>
-        <div class="hintrow"><span class="hint ${bad ? "warn" : ""}">${bad ? "Tem caractere que já deu vermelho nessa posição."
+        <div class="kb">${CHARS.map(c => { const off = curBan.has(c) || K.dead(c); return `<button class="key ${K.state[c]} ${off ? "no" : ""}" data-key="${c}" ${off ? "disabled" : ""}><span>${c}</span></button>`; }).join("")}</div>
+        <div class="hintrow"><span class="hint ${bad ? "warn" : ""}">${bad ? "Tem caractere que não pode ficar nessa posição."
           : `Posição <b>${S.cur + 1}</b> · ${K.left[S.cur]} possíveis`}</span>
           <button class="btn cyan" data-act="send" ${S.draft.every(Boolean) ? "" : "disabled"}>Testar senha ⏎</button></div>`;
     }
@@ -448,11 +474,12 @@ function events(prev, room){
     [...e.f].forEach((f, i) => Sound.reveal(f, i));
     const dl = L * .08 + .15, gained = K1.greens - K0.greens;
     S.popGreens = K1.fixed.map((c, i) => c && !K0.fixed[i] ? i : -1).filter(i => i >= 0);
-    if(e.f.includes("R")){
-      if(K1.greens === L - 1 && K0.greens < L - 1){ Sound.near(dl); burst("Falta 1!", "orange", "só mais um caractere", dl * 1000); vignette("orange", dl * 1000); }
+    if(!/^G+$/.test(e.f)){
+      if(K1.found === L && K0.found < L && K1.greens < L - 1){ Sound.allFound(dl); burst("Todos encontrados!", "cyan", "agora é só acertar a ordem", dl * 1000); vignette("green", dl * 1000); }
+      else if(K1.greens === L - 1 && K0.greens < L - 1){ Sound.near(dl); burst("Falta 1!", "orange", "só mais um caractere", dl * 1000); vignette("orange", dl * 1000); }
       else if(gained >= 3){ Sound.newGreen(dl); burst(`+${gained} verdes!`, "green", "", dl * 1000); vignette("green", dl * 1000); }
       else if(gained > 0){ Sound.newGreen(dl); burst(gained > 1 ? `+${gained} verdes` : "Novo verde!", "green", "", dl * 1000); }
-      else burst("Nenhum acerto", "red", "", dl * 1000);
+      else if(!e.f.includes("O")) burst("Nenhum acerto", "red", "", dl * 1000);
     }
   }
   const pd = listOf(prev, me()), nd = listOf(room, me());
@@ -520,7 +547,7 @@ function resolvePending(room, def = me(), sec = mySecret()){
   const attacker = 1 - def, first = Number(room.first), second = 1 - first, patch = {};
   let solved = false;
   if(e.s) patch[`guesses/${def}/${n}/f`] = "-";
-  else { const fb = feedback(sec, [...e.g]); patch[`guesses/${def}/${n}/f`] = fb; solved = !fb.includes("R"); }
+  else { const fb = feedback(sec, [...e.g]); patch[`guesses/${def}/${n}/f`] = fb; solved = /^G+$/.test(fb); }
   patch[`typing/${attacker}`] = null;
   const lc = room.lc;
   if(solved){
@@ -564,7 +591,18 @@ const Bot = (() => {
   function reset(){ round = null; busy = false; clearTimeout(readyT); readyT = null; }
   function think(room){
     const o = Object.assign({}, DEF_OPTS, room.opts), K = knowledge(listOf(room, 0), o.len, o.rep);
-    return K.fixed.map((c, i) => { if(c) return c; const ok = CHARS.filter(x => !K.ban[i].has(x)); return ok[Math.floor(Math.random() * ok.length)]; }).join("");
+    const L = o.len, g = Array(L).fill(null);
+    for(let i = 0; i < L; i++) if(K.fixed[i]) g[i] = K.fixed[i];
+    const need = []; CHARS.forEach(c => { const k = (K.mn[c] || 0) - K.fixed.filter(x => x === c).length; for(let j = 0; j < k; j++) need.push(c); });
+    need.sort(() => Math.random() - .5);
+    for(const c of need){ const sl = []; for(let i = 0; i < L; i++) if(!g[i] && !K.ban[i].has(c)) sl.push(i); if(sl.length) g[sl[Math.floor(Math.random() * sl.length)]] = c; }
+    const fresh = CHARS.filter(c => !K.mn[c] && !K.dead(c)).sort(() => Math.random() - .5);
+    for(let i = 0; i < L; i++){
+      if(g[i]) continue;
+      if(fresh.length){ g[i] = fresh.pop(); continue; }
+      const ok = CHARS.filter(x => !K.dead(x) && !K.ban[i].has(x)); g[i] = ok.length ? ok[Math.floor(Math.random() * ok.length)] : CHARS[0];
+    }
+    return g.join("");
   }
   function step(room){
     if(!room) return;
@@ -660,7 +698,7 @@ function typeChar(c){
   if(!myTurn()) return;
   const K = curK();
   if(K.fixed[S.cur]) return;
-  if(K.ban[S.cur].has(c)){ Sound.deny(); return; }
+  if(K.ban[S.cur].has(c) || K.dead(c)){ Sound.deny(); return; }
   S.draft[S.cur] = c; Sound.key();
   let n = -1; for(let i = S.cur + 1; i < L; i++) if(!K.fixed[i] && !S.draft[i]){ n = i; break; }
   if(n < 0) for(let i = S.cur + 1; i < L; i++) if(!K.fixed[i]){ n = i; break; }

@@ -125,6 +125,7 @@ button:disabled{cursor:not-allowed}
 .tile > b{font:800 1.75em var(--mono)}
 .tile.G{background:linear-gradient(160deg,#3cf0a4,var(--g));box-shadow:0 0 1em rgba(34,211,138,.4);color:#04281a}
 .tile.R{background:linear-gradient(160deg,#5a2433,#431a27);color:#ff9cab;box-shadow:inset 0 0 0 1px rgba(255,77,98,.35)}
+.tile.O{background:linear-gradient(160deg,#ffb056,#ff8f1f);box-shadow:0 0 .9em rgba(255,143,31,.3);color:#2b1400}
 .tile.flip{animation:flip .45s cubic-bezier(.3,1.4,.5,1) both}
 @keyframes flip{0%{transform:rotateX(90deg) scale(.9);filter:brightness(2)}100%{transform:none}}
 .tile.scan{background:linear-gradient(90deg,var(--unk),#1f5a76,var(--unk));background-size:200% 100%;animation:scan 1s linear infinite}
@@ -167,7 +168,10 @@ button:disabled{cursor:not-allowed}
 .key span{font:700 1.1em var(--mono)}
 .key:hover:not(:disabled){background:#21566f}
 .key:active:not(:disabled){transform:scale(.94)}
-.key.no{background:rgba(20,40,52,.45);color:#3e5d6b;text-decoration:line-through}
+.key.O{background:#ff8f1f;color:#2b1400}
+.key.G{background:var(--g);color:#03281a}
+.key.R{background:rgba(20,40,52,.35);color:#33505d}
+.key.no{opacity:.35;text-decoration:line-through}
 .key.hit{background:var(--g);color:#03281a}
 .key.flash{animation:pop .5s ease}
 
