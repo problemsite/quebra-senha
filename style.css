@@ -247,3 +247,14 @@ button:disabled{cursor:not-allowed}
 
 @media (max-width:900px){ :root{--nbw:96vw} }
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+
+/* resultado da tentativa (pausa antes de passar a vez) */
+.result{display:flex;flex-direction:column;align-items:center;gap:.7em;padding:1em 2em;min-height:10.5em;justify-content:center;animation:fade .4s ease .9s both}
+.rtitle{font-family:var(--display);font-weight:700;font-size:1.9em}
+.rcount{display:flex;gap:.6em;flex-wrap:wrap;justify-content:center}
+.rcount span{font-weight:800;font-size:1.15em;padding:.35em .9em;border-radius:999px}
+.cG{background:rgba(34,211,138,.18);color:#6ff0b6}.cO{background:rgba(255,143,31,.18);color:#ffb56a}.cR{background:rgba(255,77,98,.16);color:#ff9cab}
+.rnext{color:var(--ink-2);font-size:.95em;display:flex;align-items:center;gap:.5em}
+.rbar{width:22em;height:.3em;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden}
+.rbar i{display:block;height:100%;background:var(--cyan);transform-origin:left;animation:rbar linear both}
+@keyframes rbar{from{transform:scaleX(1)}to{transform:scaleX(0)}}

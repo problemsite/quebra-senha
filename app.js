@@ -362,7 +362,7 @@ function updateGame(){
   $("#mypw").innerHTML = `Sua senha: <span class="pw ${S.hidePw ? "blur" : ""}">${sec.map((c, i) => KD.fixed[i] ? `<i>${esc(c)}</i>` : esc(c)).join("")}</span>
     <button class="eye" data-act="eye">${S.hidePw ? "MOSTRAR" : "ESCONDER"}</button>`;
   const pill = over ? `<span class="turnpill">Fim de partida</span>`
-    : `<span class="turnpill ${lastC ? "last" : mine ? "mine" : "opp"}">${lastC ? "Última chance · " : ""}${mine ? "Sua vez" : "Vez de " + esc(nameOf(room.turn))}</span>`;
+    : `<span class="turnpill ${lastC ? "last" : mine ? "mine" : "opp"}">${lastC ? "Última chance · " : ""}${room.hold != null ? (room.hold === me() ? "Seu resultado" : "Resultado de " + esc(nameOf(room.hold))) : mine ? "Sua vez" : "Vez de " + esc(nameOf(room.turn))}</span>`;
   $("#turn").innerHTML = pill + (opts().time && !over ? `<span class="tm" id="tm"></span>` : "");
   renderTimer();
 
@@ -376,7 +376,16 @@ function updateGame(){
     if(mine && !pending && S.draftKey !== tk){ S.draftKey = tk; S.draft = Array(L).fill(""); prefill(K); pushTyping(); }
     const pops = S.popGreens; S.popGreens = null;
     let bottom = "";
+    const holding = room.hold === me() && !over;
     if(over) bottom = `<div class="actions"><button class="btn cyan" data-act="showend">Ver resultado</button></div>`;
+    else if(holding){
+      const e = atk[atk.length - 1], f = e?.f || "";
+      const nG = (f.match(/G/g) || []).length, nO = (f.match(/O/g) || []).length, nR = (f.match(/R/g) || []).length;
+      bottom = e?.s ? `<div class="result"><div class="rtitle">Tempo esgotado</div></div>`
+        : `<div class="result"><div class="rtitle">Resultado da tentativa</div>
+          <div class="rcount"><span class="cG">${nG} verde${nG===1?"":"s"}</span><span class="cO">${nO} laranja${nO===1?"":"s"}</span><span class="cR">${nR} vermelho${nR===1?"":"s"}</span></div>
+          <div class="rnext">Vez de ${esc(nameOf(opp()))} em instantes <span class="dots"><i></i><i></i><i></i></span></div><div class="rbar"><i style="animation-duration:${REVEAL_MS}ms"></i></div></div>`;
+    }
     else if(pending) bottom = `<div class="hintrow"><span class="waiting" style="color:var(--ink-2)">Verificando <span class="dots"><i></i><i></i><i></i></span></span></div>`;
     else {
       const curBan = K.ban[S.cur] || new Set(), bad = S.draft.some((c, i) => c && !K.fixed[i] && (K.ban[i].has(c) || K.dead(c)));
@@ -406,7 +415,7 @@ function updateGame(){
       ${lastBlock(def, me(), esc(nameOf(opp())))}
       <div class="blk"><div class="lbl">Tela de ${esc(nameOf(opp()))}</div>
         <div class="row">${[...typing].slice(0, L).map((c, i) => `<div class="slot ghost ${KD.fixed[i] ? "lock" : ""} ${!pending && i === tcur ? "cur" : ""} ${c !== "." && !KD.fixed[i] ? "typed" : ""}" style="${KD.fixed[i] ? "background:linear-gradient(160deg,#ff6d7f,#d93349);color:#fff" : ""}"><b>${c === "." ? "" : esc(c)}</b></div>`).join("")}</div></div>
-      <div class="hintrow"><span class="waiting">${pending ? "Verificando" : `${esc(nameOf(opp()))} está digitando`} <span class="dots"><i></i><i></i><i></i></span></span></div>`;
+      <div class="hintrow"><span class="waiting">${pending ? "Verificando" : room.hold === opp() ? `${esc(nameOf(opp()))} está vendo o resultado` : `${esc(nameOf(opp()))} está digitando`} <span class="dots"><i></i><i></i><i></i></span></span></div>`;
   }
   let dl = $(".danger-loop");
   if(!over && KD.greens >= L - 1){ if(!dl){ dl = document.createElement("div"); dl.className = "danger-loop"; document.body.appendChild(dl); } }
@@ -544,24 +553,31 @@ function onRoom(room){
 function resolvePending(room, def = me(), sec = mySecret()){
   const list = listOf(room, def); if(!list.length || !sec) return;
   const n = list.length - 1, e = list[n]; if(e.f) return;
+  const rk = `${S.code}:${room.round}:${def}:${n}`; S.resolved = S.resolved || {}; if(S.resolved[rk]) return; S.resolved[rk] = 1;
   const attacker = 1 - def, first = Number(room.first), second = 1 - first, patch = {};
   let solved = false;
   if(e.s) patch[`guesses/${def}/${n}/f`] = "-";
   else { const fb = feedback(sec, [...e.g]); patch[`guesses/${def}/${n}/f`] = fb; solved = /^G+$/.test(fb); }
   patch[`typing/${attacker}`] = null;
-  const lc = room.lc;
+  const lc = room.lc, rest = {};
   if(solved){
-    if(attacker === first && Object.assign({}, DEF_OPTS, room.opts).last && lc == null){ patch.lc = attacker; patch.turn = second; }
+    if(attacker === first && Object.assign({}, DEF_OPTS, room.opts).last && lc == null){ rest.lc = attacker; rest.turn = second; }
     else { patch.state = "over"; patch.winner = lc != null ? "draw" : attacker; patch.turn = null; }
   } else if(lc != null && attacker === second){ patch.state = "over"; patch.winner = lc; patch.turn = null; }
-  else patch.turn = 1 - attacker;
+  else rest.turn = 1 - attacker;
+  if(patch.state === "over"){ S.net.update(S.code, patch); return; }
+  // mostra o resultado para quem chutou antes de passar a vez
+  patch.hold = attacker;
   S.net.update(S.code, patch);
+  const code = S.code, rnd = room.round;
+  setTimeout(() => { if(S.code === code && S.room?.round === rnd && S.room.state === "play" && S.room.hold === attacker && listOf(S.room, def).length === n + 1) S.net.update(code, { ...rest, hold: null }); }, e.s ? 1500 : REVEAL_MS);
 }
+const REVEAL_MS = 4200;
 
 /* ---------- cronômetro ---------- */
 function syncTimer(){
   const room = S.room, t = opts().time;
-  const key = room && room.state === "play" && t ? room.round + ":" + room.turn + ":" + listOf(room, 1 - room.turn).length : null;
+  const key = room && room.state === "play" && t && room.hold == null ? room.round + ":" + room.turn + ":" + listOf(room, 1 - room.turn).length : null;
   if(key === S.timer.key) return;
   clearInterval(S.timer.id); S.timer.key = key;
   if(!key) return renderTimer();
@@ -570,7 +586,7 @@ function syncTimer(){
     S.timer.left--; renderTimer();
     if(S.room.turn === me()){
       if(S.timer.left <= 10 && S.timer.left > 0) Sound.tick(S.timer.left <= 5);
-      if(S.timer.left <= 0){ clearInterval(S.timer.id); Sound.timeout(); burst("Tempo esgotado", "red");
+      if(S.timer.left <= 0 && S.room.hold == null){ clearInterval(S.timer.id); Sound.timeout(); burst("Tempo esgotado", "red");
         S.net.update(S.code, { [`guesses/${opp()}/${listOf(S.room, opp()).length}`]: { g: "", f: "", s: true } }); }
     }
     if(S.timer.left <= 0) clearInterval(S.timer.id);
@@ -684,7 +700,7 @@ function lockPw(){
   if(S.solo) S.soloSecret = [...S.draft]; else ls.set(secretKey(), [...S.draft]);
   Sound.lock(); S.net.update(S.code, { [`players/${me()}/ready`]: true });
 }
-const myTurn = () => { if(S.screen !== "game" || S.room?.state !== "play" || S.room.turn !== me()) return false; const a = listOf(S.room, opp()); return !(a.length && !a[a.length - 1].f); };
+const myTurn = () => { if(S.screen !== "game" || S.room?.state !== "play" || S.room.turn !== me() || S.room.hold != null) return false; const a = listOf(S.room, opp()); return !(a.length && !a[a.length - 1].f); };
 const curK = () => knowledge(listOf(S.room, opp()), LEN(), opts().rep);
 function typeChar(c){
   const L = LEN();
