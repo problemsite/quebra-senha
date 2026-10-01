@@ -31,13 +31,14 @@ Arquivos: index.html, style.css, app.js, firebase-config.js
    f. Suba a pasta para o GitHub Pages.
 
 3) COMO JOGAR
-   - Um cria a sala e manda o código (ou o botão "Copiar link").
-   - O outro entra com o código. O dono da sala escolhe as opções e clica em Começar.
-   - Cada um cria a senha no próprio PC. A senha NÃO vai para o servidor durante a partida:
-     o PC de cada jogador calcula as cores das tentativas contra a própria senha.
-     Por isso os dois precisam ficar com a página aberta até o fim.
-   - Recarregou a página sem querer? Abra o mesmo link (?sala=CÓDIGO) que ele volta pra sala.
+   - Um cria a sala e manda o código (ou o botão "Copiar link"). O outro entra com o código.
+   - O dono da sala escolhe: tamanho da senha (8, 10 ou 12), tempo por jogada, quem começa e repetição.
+   - Cada um cria a senha (letras e números) no próprio PC. A senha NÃO vai para o servidor durante a partida.
+   - Verde = caractere certo naquela posição. Vermelho = não é esse naquela posição.
+   - Na vez do outro, você vê ao vivo o que ele está digitando.
+   - Os dois precisam ficar com a página aberta até o fim.
+   - Recarregou sem querer? Abra o mesmo link (?sala=CÓDIGO) que volta pra sala.
 
 4) GRAVAÇÃO
-   - Os cantos de baixo, dos dois lados, ficam livres para as câmeras.
+   - Os cantos de baixo, dos dois lados do notebook, ficam livres para as câmeras.
    - Funciona melhor em 1920x1080 em tela cheia (F11).
