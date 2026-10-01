@@ -1,0 +1,43 @@
+QUEBRA-SENHA — duelo 1v1 online
+================================
+
+Arquivos: index.html, style.css, app.js, firebase-config.js
+
+0) TREINAR SOZINHO
+   Na tela inicial, clique em "Treinar sozinho contra o robô". Funciona sem Firebase.
+
+1) TESTAR SEM CONFIGURAR NADA
+   Abra o index.html por um servidor (ou pelo GitHub Pages) em DUAS abas do mesmo navegador.
+   Sem Firebase, o jogo roda em "modo local" e só conecta abas do mesmo navegador.
+
+2) JOGAR EM DOIS COMPUTADORES (Firebase, grátis)
+   a. console.firebase.google.com > use um projeto que você já tem ou crie um.
+   b. Build > Realtime Database > Criar banco.
+   c. Aba "Regras", cole isto e publique:
+
+      {
+        "rules": {
+          "quebrasenha": {
+            "rooms": {
+              "$code": { ".read": true, ".write": true }
+            }
+          }
+        }
+      }
+
+   d. Configurações do projeto > Seus apps > Web (</>) > copie o objeto firebaseConfig
+      (ele precisa ter o campo databaseURL).
+   e. Cole no firebase-config.js no lugar de "null".
+   f. Suba a pasta para o GitHub Pages.
+
+3) COMO JOGAR
+   - Um cria a sala e manda o código (ou o botão "Copiar link").
+   - O outro entra com o código. O dono da sala escolhe as opções e clica em Começar.
+   - Cada um cria a senha no próprio PC. A senha NÃO vai para o servidor durante a partida:
+     o PC de cada jogador calcula as cores das tentativas contra a própria senha.
+     Por isso os dois precisam ficar com a página aberta até o fim.
+   - Recarregou a página sem querer? Abra o mesmo link (?sala=CÓDIGO) que ele volta pra sala.
+
+4) GRAVAÇÃO
+   - Os cantos de baixo, dos dois lados, ficam livres para as câmeras.
+   - Funciona melhor em 1920x1080 em tela cheia (F11).
