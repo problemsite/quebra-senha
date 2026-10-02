@@ -341,12 +341,19 @@ function rowTiles(g, f, cls = "", animKey = null){
   if(anim) S.animDone[animKey] = true;
   return `<div class="row ${cls}">${[...g].map((c, i) => `<div class="tile ${f ? f[i] : "scan"} ${anim ? "flip" : ""}" style="${anim ? `animation-delay:${i * 80}ms` : ""}"><b>${esc(c)}</b></div>`).join("")}</div>`;
 }
-function lastBlock(list, pc, who){
-  const n = list.length;
-  if(!n) return `<div class="blk"><div class="lbl">Última tentativa</div><div class="empty-last">Nenhuma tentativa ainda</div></div>`;
-  const e = list[n - 1];
-  if(e.s) return `<div class="blk"><div class="lbl">Tentativa ${n} · ${who}</div><div class="empty-last">tempo esgotado</div></div>`;
-  return `<div class="blk"><div class="lbl">Tentativa ${tries(list)} · ${who}</div>${rowTiles(e.g, e.f, "last", e.f ? `${S.room.round}:${pc}:${n - 1}` : null)}</div>`;
+function bigLast(list, K, who, showCounts){
+  const L = LEN(), real = list.filter(e => !e.s), e = real[real.length - 1];
+  const cnt = i => showCounts ? `<span class="cnt">${K.fixed[i] ? "✓" : K.left[i]}</span>` : `<span class="cnt"></span>`;
+  if(!e) return `<div class="blk"><div class="lbl">Nenhuma tentativa ainda</div>
+    <div class="row big">${Array.from({ length: L }, (_, i) => `<div class="cell">${cnt(i)}<div class="tile"><b>?</b></div></div>`).join("")}</div></div>`;
+  const f = e.f || "";
+  return `<div class="blk"><div class="lbl">Tentativa ${real.length} · ${who}</div>
+    <div class="row big">${[...e.g].map((c, i) => `<div class="cell">${cnt(i)}<div class="tile ${f ? f[i] : "scan"}"><b>${esc(c)}</b></div></div>`).join("")}</div></div>`;
+}
+function histBlock(list){
+  const real = list.filter(e => !e.s && e.f).slice(0, -1).reverse();
+  if(!real.length) return `<div class="hist"></div>`;
+  return `<div class="hist">${real.map((e, k) => `<div class="hrow"><span class="hn">${real.length - k}</span>${[...e.g].map((c, i) => `<i class="${e.f[i]}">${esc(c)}</i>`).join("")}</div>`).join("")}</div>`;
 }
 function updateGame(){
   const room = S.room, L = LEN(), rep = opts().rep;
@@ -373,19 +380,11 @@ function updateGame(){
   if(mine || over){
     const pending = atk.length && !atk[atk.length - 1].f;
     const tk = room.round + ":" + atk.length;
-    if(mine && !pending && S.draftKey !== tk){ S.draftKey = tk; S.draft = Array(L).fill(""); prefill(K); pushTyping(); }
-    const pops = S.popGreens; S.popGreens = null;
+    if(mine && !pending && S.draftKey !== tk){ S.draftKey = tk; S.draft = Array(L).fill(""); prefill(K); }
     let bottom = "";
     const holding = room.hold === me() && !over;
     if(over) bottom = `<div class="actions"><button class="btn cyan" data-act="showend">Ver resultado</button></div>`;
-    else if(holding){
-      const e = atk[atk.length - 1], f = e?.f || "";
-      const nG = (f.match(/G/g) || []).length, nO = (f.match(/O/g) || []).length, nR = (f.match(/R/g) || []).length;
-      bottom = e?.s ? `<div class="result"><div class="rtitle">Tempo esgotado</div></div>`
-        : `<div class="result"><div class="rtitle">Resultado da tentativa</div>
-          <div class="rcount"><span class="cG">${nG} verde${nG===1?"":"s"}</span><span class="cO">${nO} laranja${nO===1?"":"s"}</span><span class="cR">${nR} vermelho${nR===1?"":"s"}</span></div>
-          <div class="rnext">Vez de ${esc(nameOf(opp()))} em instantes <span class="dots"><i></i><i></i><i></i></span></div><div class="rbar"><i style="animation-duration:${REVEAL_MS}ms"></i></div></div>`;
-    }
+    else if(holding) bottom = `<div class="result"><div class="rnext">Vez de ${esc(nameOf(opp()))} em instantes <span class="dots"><i></i><i></i><i></i></span></div><div class="rbar"><i style="animation-duration:${REVEAL_MS}ms"></i></div></div>`;
     else if(pending) bottom = `<div class="hintrow"><span class="waiting" style="color:var(--ink-2)">Verificando <span class="dots"><i></i><i></i><i></i></span></span></div>`;
     else {
       const curBan = K.ban[S.cur] || new Set(), bad = S.draft.some((c, i) => c && !K.fixed[i] && (K.ban[i].has(c) || K.dead(c)));
@@ -400,22 +399,14 @@ function updateGame(){
           <button class="btn cyan" data-act="send" ${S.draft.every(Boolean) ? "" : "disabled"}>Testar senha ⏎</button></div>`;
     }
     main.innerHTML = `<div class="ghead">Invadindo o PC de <b>${esc(nameOf(opp()))}</b></div>
-      <div class="row big">${Array.from({ length: L }, (_, i) => K.fixed[i]
-        ? `<div class="tile G ${pops && pops.includes(i) ? "pop" : ""}"><b>${esc(K.fixed[i])}</b></div>`
-        : `<div class="tile"><b>?</b><small>${K.left[i]}</small></div>`).join("")}</div>
-      ${lastBlock(atk, opp(), "você")}
+      ${bigLast(atk, K, "você", true)}
+      ${histBlock(atk)}
       ${bottom}`;
   } else {
-    const pending = def.length && !def[def.length - 1].f;
-    const typing = (room.typing?.[opp()] || "").padEnd(L, ".");
-    const tcur = typing.indexOf(".");
-    const pops = S.popDef; S.popDef = null;
     main.innerHTML = `<div class="ghead def"><b>${esc(nameOf(opp()))}</b> está invadindo seu PC</div>
-      <div class="row big">${sec.map((c, i) => `<div class="tile mine ${KD.fixed[i] ? "G" : ""} ${pops && pops.includes(i) ? "pop" : ""}"><b>${esc(c)}</b></div>`).join("")}</div>
-      ${lastBlock(def, me(), esc(nameOf(opp())))}
-      <div class="blk"><div class="lbl">Tela de ${esc(nameOf(opp()))}</div>
-        <div class="row">${[...typing].slice(0, L).map((c, i) => `<div class="slot ghost ${KD.fixed[i] ? "lock" : ""} ${!pending && i === tcur ? "cur" : ""} ${c !== "." && !KD.fixed[i] ? "typed" : ""}" style="${KD.fixed[i] ? "background:linear-gradient(160deg,#ff6d7f,#d93349);color:#fff" : ""}"><b>${c === "." ? "" : esc(c)}</b></div>`).join("")}</div></div>
-      <div class="hintrow"><span class="waiting">${pending ? "Verificando" : room.hold === opp() ? `${esc(nameOf(opp()))} está vendo o resultado` : `${esc(nameOf(opp()))} está digitando`} <span class="dots"><i></i><i></i><i></i></span></span></div>`;
+      ${bigLast(def, KD, esc(nameOf(opp())), false)}
+      ${histBlock(def)}
+      <div class="hintrow"><span class="waiting">${room.hold === opp() ? `${esc(nameOf(opp()))} está vendo o resultado` : `${esc(nameOf(opp()))} está pensando`} <span class="dots"><i></i><i></i><i></i></span></span></div>`;
   }
   let dl = $(".danger-loop");
   if(!over && KD.greens >= L - 1){ if(!dl){ dl = document.createElement("div"); dl.className = "danger-loop"; document.body.appendChild(dl); } }
@@ -426,12 +417,7 @@ function prefill(K){
   for(let i = 0; i < LEN(); i++) if(K.fixed[i]) S.draft[i] = K.fixed[i];
   const f = S.draft.findIndex((c, i) => !K.fixed[i]); S.cur = f < 0 ? 0 : f;
 }
-let typingT = null;
-function pushTyping(){
-  if(!S.code || S.room?.state !== "play" || S.room.turn !== me()) return;
-  clearTimeout(typingT);
-  typingT = setTimeout(() => S.net.update(S.code, { [`typing/${me()}`]: S.draft.map(c => c || ".").join("") }), S.net.mode === "online" ? 60 : 0);
-}
+function pushTyping(){}
 
 /* ---------- fim ---------- */
 function showEnd(){
@@ -473,35 +459,64 @@ function confetti(){
     if(t < 220) requestAnimationFrame(f); else cx.clearRect(0, 0, cv.width, cv.height); })();
 }
 
+/* ---------- transição de resultado: senha enviada → cores → contagem ---------- */
+const RV = { show: 650, step: 90 };
+function revealShow(e, who, head){
+  const L = e.g.length, scr = $(".screen"); if(!scr) return;
+  $(".rvov")?.remove();
+  const nG = (e.f.match(/G/g) || []).length, nO = (e.f.match(/O/g) || []).length, nR = L - nG - nO;
+  const ov = document.createElement("div"); ov.className = "rvov";
+  ov.innerHTML = `<div class="rvbox">
+    <div class="rvwho">${who}</div>
+    <div class="row rvrow">${[...e.g].map((c, i) => `<div class="tile rv" data-f="${e.f[i]}" style="--d:${RV.show + i * RV.step}ms"><b>${esc(c)}</b></div>`).join("")}</div>
+    <div class="rvcount">
+      <div class="rc G"><b data-n="${nG}">0</b><span>verde${nG === 1 ? "" : "s"}</span></div>
+      <div class="rc O"><b data-n="${nO}">0</b><span>laranja${nO === 1 ? "" : "s"}</span></div>
+      <div class="rc R"><b data-n="${nR}">0</b><span>vermelho${nR === 1 ? "" : "s"}</span></div>
+    </div>
+    <div class="rvhead"></div></div>`;
+  scr.appendChild(ov);
+  Sound.send();
+  const tiles = ov.querySelectorAll(".tile.rv");
+  tiles.forEach((t, i) => setTimeout(() => { t.classList.add(t.dataset.f, "flip"); Sound.reveal(t.dataset.f, 0); }, RV.show + i * RV.step));
+  const tCount = RV.show + L * RV.step + 250;
+  ov.querySelectorAll(".rc").forEach((rc, k) => setTimeout(() => {
+    rc.classList.add("on"); const b = rc.querySelector("b"), n = +b.dataset.n;
+    let v = 0; const iv = setInterval(() => { b.textContent = v; if(v++ >= n) clearInterval(iv); }, Math.max(18, 260 / Math.max(1, n)));
+    Sound.tick(k === 0);
+  }, tCount + k * 260));
+  if(head) setTimeout(() => {
+    const h = ov.querySelector(".rvhead"); h.className = "rvhead on " + head[1];
+    h.innerHTML = head[0] + (head[3] ? `<small>${head[3]}</small>` : ""); head[2]();
+  }, tCount + 3 * 260 + 150);
+  setTimeout(() => ov.classList.add("out"), REVEAL_MS - 450);
+  setTimeout(() => ov.remove(), REVEAL_MS);
+}
+
 /* ---------- momentos importantes ---------- */
 function events(prev, room){
   if(!prev || prev.round !== room.round || (room.state !== "play" && room.state !== "over")) return;
   const L = Object.assign({}, DEF_OPTS, room.opts).len, rep = Object.assign({}, DEF_OPTS, room.opts).rep;
   const pa = listOf(prev, opp()), na = listOf(room, opp());
   if(revealed(na).length > revealed(pa).length){
-    const e = revealed(na).slice(-1)[0], K0 = knowledge(pa, L, rep), K1 = knowledge(na, L, rep);
-    [...e.f].forEach((f, i) => Sound.reveal(f, i));
-    const dl = L * .08 + .15, gained = K1.greens - K0.greens;
-    S.popGreens = K1.fixed.map((c, i) => c && !K0.fixed[i] ? i : -1).filter(i => i >= 0);
-    if(!/^G+$/.test(e.f)){
-      if(K1.found === L && K0.found < L && K1.greens < L - 1){ Sound.allFound(dl); burst("Todos encontrados!", "cyan", "agora é só acertar a ordem", dl * 1000); vignette("green", dl * 1000); }
-      else if(K1.greens === L - 1 && K0.greens < L - 1){ Sound.near(dl); burst("Falta 1!", "orange", "só mais um caractere", dl * 1000); vignette("orange", dl * 1000); }
-      else if(gained >= 3){ Sound.newGreen(dl); burst(`+${gained} verdes!`, "green", "", dl * 1000); vignette("green", dl * 1000); }
-      else if(gained > 0){ Sound.newGreen(dl); burst(gained > 1 ? `+${gained} verdes` : "Novo verde!", "green", "", dl * 1000); }
-      else if(!e.f.includes("O")) burst("Nenhum acerto", "red", "", dl * 1000);
-    }
+    const e = revealed(na).slice(-1)[0], K0 = knowledge(pa, L, rep), K1 = knowledge(na, L, rep), gained = K1.greens - K0.greens;
+    let head = null;
+    if(/^G+$/.test(e.f)) head = ["Senha quebrada!", "green", () => Sound.allFound(0)];
+    else if(K1.found === L && K0.found < L && K1.greens < L - 1) head = ["Todos encontrados!", "cyan", () => { Sound.allFound(0); vignette("green"); }];
+    else if(K1.greens === L - 1 && K0.greens < L - 1) head = ["Falta 1!", "orange", () => { Sound.near(0); vignette("orange"); }];
+    else if(gained > 0) head = [gained > 1 ? `+${gained} verdes!` : "Novo verde!", "green", () => { Sound.newGreen(0); if(gained >= 3) vignette("green"); }];
+    else if(!/[GO]/.test(e.f)) head = ["Nenhum acerto", "red", () => {}];
+    revealShow(e, "Você testou", head);
   }
   const pd = listOf(prev, me()), nd = listOf(room, me());
   if(revealed(nd).length > revealed(pd).length){
-    const K0 = knowledge(pd, L, rep), K1 = knowledge(nd, L, rep);
-    S.popDef = K1.fixed.map((c, i) => c && !K0.fixed[i] ? i : -1).filter(i => i >= 0);
-    if(K1.greens > K0.greens && K1.greens < L) setTimeout(() => {
-      if(K1.greens >= L - 1){ Sound.alarm(); burst("Alerta!", "red", `${esc(nameOf(opp()))} está a 1 caractere`); vignette("red"); }
-      else Sound.oppGreen();
-    }, 300);
+    const e = revealed(nd).slice(-1)[0], K0 = knowledge(pd, L, rep), K1 = knowledge(nd, L, rep), gained = K1.greens - K0.greens;
+    let head = null;
+    if(/^G+$/.test(e.f)) head = ["Seu PC foi invadido!", "red", () => Sound.alarm()];
+    else if(K1.greens >= L - 1 && K0.greens < L - 1) head = ["Alerta!", "red", () => { Sound.alarm(); vignette("red"); }, `${esc(nameOf(opp()))} está a 1 caractere`];
+    else if(gained > 0) head = [gained > 1 ? `${esc(nameOf(opp()))} achou ${gained} verdes` : `${esc(nameOf(opp()))} achou 1 verde`, "orange", () => Sound.oppGreen()];
+    revealShow(e, `${esc(nameOf(opp()))} testou`, head);
   }
-  const pt = (prev.typing?.[opp()] || "").replace(/\./g, "").length, nt = (room.typing?.[opp()] || "").replace(/\./g, "").length;
-  if(room.turn === opp() && nt > pt) Sound.oppKey();
   if(prev.lc == null && room.lc != null && room.state === "play"){
     setTimeout(() => { Sound.lastChance(); vignette("orange");
       if(room.turn === me()) burst("Última chance!", "orange", `${esc(nameOf(opp()))} acertou. Acerte agora para empatar.`);
@@ -509,7 +524,7 @@ function events(prev, room){
     return;
   }
   if(room.state === "play" && prev.turn !== room.turn && room.turn === me())
-    setTimeout(() => { Sound.turn(); sweep(); burst("Sua vez", "cyan"); }, prev.state === "play" ? 1500 : 200);
+    setTimeout(() => { Sound.turn(); sweep(); burst("Sua vez", "cyan"); }, 250);
 }
 
 /* =====================================================================
@@ -545,7 +560,7 @@ function onRoom(room){
       if(first) setTimeout(() => {
         if(res === "win"){ Sound.win(); confetti(); vignette("green"); } else if(res === "lose"){ Sound.lose(); vignette("red"); } else { Sound.win(); confetti(); }
         if(S.room?.state === "over") showEnd();
-      }, 1500);
+      }, REVEAL_MS - 300);
       else if($(".endov")) showEnd();
     }
   }
@@ -572,7 +587,7 @@ function resolvePending(room, def = me(), sec = mySecret()){
   const code = S.code, rnd = room.round;
   setTimeout(() => { if(S.code === code && S.room?.round === rnd && S.room.state === "play" && S.room.hold === attacker && listOf(S.room, def).length === n + 1) S.net.update(code, { ...rest, hold: null }); }, e.s ? 1500 : REVEAL_MS);
 }
-const REVEAL_MS = 4200;
+const REVEAL_MS = 5600;
 
 /* ---------- cronômetro ---------- */
 function syncTimer(){
@@ -629,15 +644,15 @@ const Bot = (() => {
     if(room.state === "play"){
       resolvePending(room, seat, S.botSecret);
       const atk = listOf(room, 0), pending = atk.length && !atk[atk.length - 1].f;
-      if(room.turn === seat && !pending && !busy){
+      if(room.turn === seat && room.hold == null && !pending && !busy){
         busy = true; const n = atk.length, g = think(room), K = knowledge(atk, o.len, o.rep);
         const typed = K.fixed.map(c => c || ".");
         const order = [...g].map((c, i) => i).filter(i => !K.fixed[i]);
-        const still = () => S.solo && S.room?.turn === seat && listOf(S.room, 0).length === n && S.room.state === "play";
+        const still = () => S.solo && S.room?.turn === seat && S.room.hold == null && listOf(S.room, 0).length === n && S.room.state === "play";
         let k = 0;
         const typeNext = () => {
           if(!still()){ busy = false; return; }
-          if(k < order.length){ typed[order[k]] = g[order[k]]; k++; S.net.update(S.code, { [`typing/${seat}`]: typed.join("") }); setTimeout(typeNext, S.botFast ? 5 : 130 + Math.random() * 160); }
+          if(k < order.length){ typed[order[k]] = g[order[k]]; k++; setTimeout(typeNext, S.botFast ? 5 : 130 + Math.random() * 160); }
           else setTimeout(() => { busy = false; if(still()) S.net.update(S.code, { [`guesses/0/${n}`]: { g, f: "" } }); }, S.botFast ? 5 : 600);
         };
         setTimeout(typeNext, S.botFast ? 5 : 1400 + Math.random() * 900);
@@ -743,9 +758,9 @@ function send(){
   if(S.screen === "setup") return lockPw();
   if(!myTurn()) return;
   if(!S.draft.every(Boolean)){ const e = $("#entry"); if(e){ e.classList.remove("shake"); void e.offsetWidth; e.classList.add("shake"); } Sound.deny(); return; }
-  Sound.send(); clearTimeout(typingT);
+  Sound.send();
   const n = listOf(S.room, opp()).length;
-  S.net.update(S.code, { [`guesses/${opp()}/${n}`]: { g: S.draft.join(""), f: "" }, [`typing/${me()}`]: S.draft.join("") });
+  S.net.update(S.code, { [`guesses/${opp()}/${n}`]: { g: S.draft.join(""), f: "" } });
 }
 
 document.addEventListener("click", e => {
